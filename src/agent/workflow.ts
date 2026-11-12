@@ -1,4 +1,4 @@
-import { anyFlag, inspectDraft, inspectIncoming } from "./guard.js";
+import { anyFlag, healthHandler, inspectDraft, inspectIncoming } from "./guard.js";
 import { categoryStats, pickExamples } from "./learning.js";
 import { decideRoute } from "./policy.js";
 import { buildSystemPrompt, buildUserPrompt, parseTriage } from "./triage.js";
@@ -28,6 +28,7 @@ export async function processItem(d: Deps, item: InboxItem): Promise<Case | null
 
   // Health information is never sent to the model: a person handles it from the start.
   if (inFlags.health) {
+    base.handler = healthHandler(`${item.subject}\n${item.body}`) ?? "asklepios";
     base.routeReasons = ["health information: not sent to the agent"];
     await d.store.put("cases", item.id, base);
     return base;

@@ -31,6 +31,9 @@ export interface Triage {
   draft: string | null;
 }
 
+/** The app that owns a health message. Jarvis never reads or drafts these. */
+export type HealthHandler = "asklepios" | "pet_nurse";
+
 export type CaseStatus = "pending" | "needs_human" | "approved" | "rejected";
 
 export interface Case {
@@ -40,6 +43,8 @@ export interface Case {
   triage: Triage | null;
   draft: string | null;
   status: CaseStatus;
+  /** Set when the message is about health: a person opens the named app. */
+  handler?: HealthHandler;
   /** True when autonomy rules WOULD have allowed sending without approval (shadow mode). */
   shadowAuto: boolean;
   /** Why the case needs a person: guard flags, low confidence, thin history, etc. */

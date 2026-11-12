@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inspectDraft, inspectIncoming, redact } from "../src/agent/guard.js";
+import { healthHandler, inspectDraft, inspectIncoming, redact } from "../src/agent/guard.js";
 import { categoryStats } from "../src/agent/learning.js";
 import { decideRoute } from "../src/agent/policy.js";
 import { dayReportText, dayStats } from "../src/agent/report.js";
@@ -129,5 +129,31 @@ describe("report", () => {
     expect(s).toMatchObject({ day: 1, received: 1, waiting: 1, approved: 1, wouldAuto: 1 });
     expect(dayReportText(s, "en")).toContain("Day 1 report");
     expect(dayReportText(s, "el")).toContain("Αναφορά ημέρας 1");
+  });
+});
+
+describe("health routing", () => {
+  it("sends human health to Asklepios and animal health to the pet nurse", () => {
+    expect(healthHandler("Έχω νοσηλεία στο νοσοκομείο")).toBe("asklepios");
+    expect(healthHandler("My dog needs surgery, what does the policy cover?")).toBe("pet_nurse");
+    expect(healthHandler("Ο σκύλος μου έχει συμπτώματα")).toBe("pet_nurse");
+    expect(healthHandler("Χρειάζομαι κτηνίατρο")).toBe("pet_nurse");
+  });
+  it("does not misfire on ordinary words", () => {
+    expect(healthHandler("Which category of cover applies to my location?")).toBeNull();
+    expect(healthHandler("I would like a quote for pet insurance")).toBeNull();
+  });
+  it("treats a vet-only message as health and never calls the model", async () => {
+    let called = false;
+    const d = deps(reply());
+    d.llm = async () => { called = true; return reply(); };
+    const c = await processItem(d, item({ body: "Take my dog to the vet next week" }));
+    expect(called).toBe(false);
+    expect(c?.handler).toBe("pet_nurse");
+    expect(c?.status).toBe("needs_human");
+  });
+  it("tags human health with Asklepios", async () => {
+    const c = await processItem(deps(reply()), item({ body: "Έχω νοσηλεία" }));
+    expect(c?.handler).toBe("asklepios");
   });
 });

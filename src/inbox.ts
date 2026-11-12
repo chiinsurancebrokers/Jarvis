@@ -7,12 +7,12 @@ const esc = (s: string) =>
 const t = {
   en: {
     title: "Approval inbox", empty: "Nothing is waiting for you.", approve: "Approve → Gmail draft", reject: "Reject",
-    needs: "Needs you", pending: "Draft ready", why: "Why a person must look", from: "From",
+    needs: "Needs you", health: "Health, for you", asklepios: "Open Asklepios (people)", pet_nurse: "Open the pet AI nurse", pending: "Draft ready", why: "Why a person must look", from: "From",
     note: "Approving only creates a draft in Gmail. You press send yourself.", reply: "Reply",
   },
   el: {
     title: "Εισερχόμενα προς έγκριση", empty: "Δεν περιμένει τίποτα εσένα.", approve: "Έγκριση → προσχέδιο Gmail", reject: "Απόρριψη",
-    needs: "Χρειάζεται εσένα", pending: "Έτοιμο προσχέδιο", why: "Γιατί πρέπει να το δει άνθρωπος", from: "Από",
+    needs: "Χρειάζεται εσένα", health: "Υγεία, για σένα", asklepios: "Άνοιξε το Asklepios (άνθρωποι)", pet_nurse: "Άνοιξε τον pet AI nurse", pending: "Έτοιμο προσχέδιο", why: "Γιατί πρέπει να το δει άνθρωπος", from: "Από",
     note: "Η έγκριση δημιουργεί μόνο προσχέδιο στο Gmail. Το στέλνεις εσύ.", reply: "Απάντηση",
   },
 } satisfies Record<Lang, Record<string, string>>;
@@ -24,7 +24,7 @@ export function renderInbox(cases: Case[], lang: Lang, token: string): string {
     .sort((a, b) => (a.status === b.status ? a.createdAt.localeCompare(b.createdAt) : a.status === "needs_human" ? -1 : 1));
   const card = (c: Case) => `
   <article class="card" data-id="${esc(c.id)}">
-    <div class="tag ${c.status}">${c.status === "needs_human" ? l.needs : l.pending}</div>
+    <div class="tag ${c.status}">${c.handler ? l.health : c.status === "needs_human" ? l.needs : l.pending}</div>${c.handler ? `<p class="why"><b>${l[c.handler]}</b></p>` : ""}
     <h2>${esc(c.item.subject || "(no subject)")}</h2>
     <p class="meta">${l.from}: ${esc(c.item.from)}</p>
     ${c.triage ? `<p>${esc(c.triage.summary)}</p>` : ""}

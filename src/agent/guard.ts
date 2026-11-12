@@ -1,4 +1,4 @@
-import type { Flags } from "./types.js";
+import type { Flags, HealthHandler } from "./types.js";
 
 /** Lowercase and strip Greek/Latin accents so "Νοσηλεία" and "νοσηλεια" match. */
 export const fold = (s: string): string =>
@@ -8,7 +8,30 @@ const MONEY = ["€", "eur ", "euro", "ευρω", "iban", "premium", "ασφαλ
 const HEALTH = [
   "νοσηλει", "νοσοκομ", "χειρουργ", "διαγνωση", "θεραπει", "εξετασει", "ασθεν", "φαρμακ", "ιατρικ", "γιατρ",
   "hospital", "surgery", "diagnos", "treatment", "medical", "medication", "patient", "illness", "disease",
+  "εμβολι", "συμπτωμα", "vaccin", "symptom",
 ];
+
+// Words that are inherently about animal health, and words that name a pet.
+const VET = ["κτηνιατρ", "veterinar", "vet", "vets"];
+const PET = ["κατοικιδι", "σκυλ", "γατ", "pet", "pets", "dog", "dogs", "puppy", "cat", "cats", "kitten"];
+
+/** Whole-word (or word-start for Greek stems) match so "cat" does not hit "category". */
+const hasWord = (text: string, words: string[]) => {
+  const f = fold(text);
+  return words.some((w) => {
+    const greek = /[\u0370-\u03ff]/.test(w);
+    return new RegExp(`(^|[^\\p{L}])${w}${greek ? "" : "(?![\\p{L}])"}`, "u").test(f);
+  });
+};
+
+/** Which health app owns this message, or null when it is not about health. */
+export const healthHandler = (text: string): HealthHandler | null => {
+  const human = hit(text, HEALTH);
+  const vet = hasWord(text, VET);
+  const pet = hasWord(text, PET);
+  if (vet || (pet && human)) return "pet_nurse";
+  return human ? "asklepios" : null;
+};
 const COMMITMENT = [
   "εγγυω", "εγγυαται", "εγγυηση", "υποσχ", "δεσμευ", "καλυπτεται πληρως", "σιγουρα καλυπτεται",
   "guarantee", "promise", "we commit", "fully covered", "definitely covered", "will be covered",
@@ -22,7 +45,7 @@ const hit = (text: string, words: string[]) => {
 /** Flags on the INCOMING message. Health content never reaches the LLM. */
 export const inspectIncoming = (text: string): Flags => ({
   money: hit(text, MONEY),
-  health: hit(text, HEALTH),
+  health: hit(text, HEALTH) || hasWord(text, VET),
   commitment: false,
 });
 

@@ -9,7 +9,7 @@
 ## Done (v0.2, approval-first email agent)
 - Gmail intake (unread inbox, no promotions/social/updates) and reply DRAFT creation. Nothing is ever sent.
 - LLM triage and drafting (Anthropic API) with the owner's rules in `rules/jarvis-rules.md`
-- Hard guards: health emails skip the LLM; money and commitment content always needs a person; IBAN/card redaction
+- Hard guards: health emails (people and pets) skip the LLM and are tagged for Asklepios or the pet AI nurse; money and commitment content always needs a person; IBAN/card redaction
 - Learning: approved and edited replies become few-shot examples; per-category approval statistics
 - Autonomy policy engine in SHADOW mode only: it records what it would have auto-handled, it does not act
 - Mobile approval inbox at `/inbox`, plus `/api/cases`, `/api/stats`, `/api/poll`, `/api/report`
