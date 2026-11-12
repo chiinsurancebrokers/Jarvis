@@ -45,6 +45,11 @@ All except `/health` need `Authorization: Bearer <JARVIS_TOKEN>` (or `x-api-key`
 | POST | `/audit/run` | Run a fresh audit now. |
 | POST | `/tools/audit_summary` | Spoken summary. Body `{"language":"el"}` |
 | POST | `/tools/refresh_audit` | Fresh audit, then spoken summary. |
+| POST | `/tools/daily_report` | Spoken Day-N report of the email agent. |
+| GET | `/inbox` | Mobile approval inbox (approve, edit, reject). |
+| GET | `/api/cases`, `/api/stats`, `/api/report`, `/api/status` | Cases, learning statistics, report, configuration state. |
+| POST | `/api/poll` | Check the mailbox now. |
+| POST | `/api/cases/:id/decide` | `{"type":"approve","text":"..."}` or `{"type":"reject"}`. Approve creates a Gmail draft only. |
 
 ## Known limits
 
@@ -54,3 +59,7 @@ All except `/health` need `Authorization: Bearer <JARVIS_TOKEN>` (or `x-api-key`
 - `?token=` puts the secret in URLs and browser history. Fine for one trusted user; replace with real login before sharing.
 
 See `STATUS.md` for the roadmap.
+
+## Email agent (v0.2)
+
+Jarvis reads new client mail, drafts a reply with the Anthropic API using your rules (`rules/jarvis-rules.md`) and your past approved replies, and waits in `/inbox`. Approving creates a draft in Gmail; you press send. Health emails never reach the model, and anything about money or commitments always needs you. Autonomy is switched off and runs in shadow mode: it only records what it would have handled on its own, so you can judge it before anything changes.
