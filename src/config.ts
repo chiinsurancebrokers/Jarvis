@@ -30,6 +30,8 @@ export const config = {
   defaultLang: (process.env.DEFAULT_LANG === "el" ? "el" : "en") as Lang,
   staleDays: num(process.env.STALE_DAYS, 90),
   dormantDays: num(process.env.DORMANT_DAYS, 180),
+  /** Extra public URLs to check, comma separated. Netlify site URLs are checked automatically. */
+  probeUrls: (process.env.PROBE_URLS ?? "").split(",").map((u) => u.trim()).filter(Boolean),
   auditIntervalHours: num(process.env.AUDIT_INTERVAL_HOURS, 6),
   // Agent
   anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",

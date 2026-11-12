@@ -14,6 +14,7 @@
 - Autonomy policy engine in SHADOW mode only: it records what it would have auto-handled, it does not act
 - Mobile approval inbox at `/inbox`, plus `/api/cases`, `/api/stats`, `/api/poll`, `/api/report`
 - Bilingual Day-N report and `/tools/daily_report` voice tool
+- Live uptime checks: every audit GETs each Netlify site URL plus `PROBE_URLS`; unreachable/5xx is critical, 4xx a warning, slow pages info
 - Postgres store when `DATABASE_URL` is set, in-memory otherwise (in-memory loses history on restart)
 
 ## Next
@@ -21,7 +22,7 @@
 2. Create the ElevenLabs agent and connect the three tools
 3. Review a week of shadow results, then decide whether to allow sending for one category
 4. Carrier follow-ups and quote-request intake as dedicated flows
-5. Live URL probes and "what changed since yesterday"
+5. "What changed since yesterday" and probes for Railway service domains
 6. Optional, with explicit approval flow: redeploy / restart actions
 
 ## Deliberately out of scope for now

@@ -2,6 +2,7 @@ import type {
   Finding,
   GithubRepo,
   NetlifySite,
+  ProbeResult,
   RailwayService,
   Snapshot,
 } from "./types.js";
@@ -10,6 +11,8 @@ export interface AnalyzeOptions {
   now: Date;
   staleDays: number;
   dormantDays: number;
+  /** A page slower than this many milliseconds is flagged. */
+  slowMs?: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -122,6 +125,22 @@ function githubFindings(
   return out;
 }
 
+function probeFindings(probes: ProbeResult[], o: AnalyzeOptions): Finding[] {
+  const out: Finding[] = [];
+  const slow = o.slowMs ?? 4000;
+  for (const p of probes) {
+    const host = p.url.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+    if (p.status === null || p.status >= 500) {
+      out.push({ platform: "jarvis", project: host, severity: "critical", code: "url_down", params: { status: p.status ?? "no answer" } });
+    } else if (p.status >= 400) {
+      out.push({ platform: "jarvis", project: host, severity: "warning", code: "url_error", params: { status: p.status } });
+    } else if (p.ms > slow) {
+      out.push({ platform: "jarvis", project: host, severity: "info", code: "url_slow", params: { seconds: Math.round(p.ms / 100) / 10 } });
+    }
+  }
+  return out;
+}
+
 export function analyze(snap: Snapshot, o: AnalyzeOptions): Finding[] {
   const findings: Finding[] = [];
   for (const [source, message] of Object.entries(snap.errors)) {
@@ -137,6 +156,7 @@ export function analyze(snap: Snapshot, o: AnalyzeOptions): Finding[] {
     ...railwayFindings(snap.railway),
     ...netlifyFindings(snap.netlify, o),
     ...githubFindings(snap.github, snap, o),
+    ...probeFindings(snap.probes ?? [], o),
   );
   const rank = { critical: 0, warning: 1, info: 2 } as const;
   return findings.sort(

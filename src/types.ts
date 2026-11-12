@@ -9,7 +9,10 @@ export type FindingCode =
   | "duplicate_site"
   | "dormant_but_deployed"
   | "repo_dormant"
-  | "source_unavailable";
+  | "source_unavailable"
+  | "url_down"
+  | "url_error"
+  | "url_slow";
 
 export interface Finding {
   platform: Platform;
@@ -46,16 +49,26 @@ export interface GithubRepo {
   archived: boolean;
 }
 
+export interface ProbeResult {
+  url: string;
+  /** HTTP status, or null when the request failed. */
+  status: number | null;
+  ms: number;
+  error: string | null;
+}
+
 export interface Snapshot {
   railway: RailwayService[];
   netlify: NetlifySite[];
   github: GithubRepo[];
+  /** Live checks of public URLs. Optional: absent when none were run. */
+  probes?: ProbeResult[];
   /** Per-source error message when that source could not be read. */
   errors: Partial<Record<"railway" | "netlify" | "github", string>>;
 }
 
 export interface Report {
   generatedAt: string;
-  counts: { railwayServices: number; netlifySites: number; githubRepos: number };
+  counts: { railwayServices: number; netlifySites: number; githubRepos: number; urlsChecked?: number };
   findings: Finding[];
 }

@@ -68,3 +68,18 @@ describe("analyze", () => {
     expect(normalize("Ashlar-Proposal-Studio")).toBe("ashlarproposalstudio");
   });
 });
+
+describe("url probes", () => {
+  const base = { railway: [], netlify: [], github: [], errors: {} };
+  const o = { now: new Date("2026-11-12T00:00:00Z"), staleDays: 90, dormantDays: 180 };
+  it("flags unreachable and 5xx pages as critical, 4xx as warning, slow as info", () => {
+    const f = analyze({ ...base, probes: [
+      { url: "https://a.gr/", status: null, ms: 10000, error: "timeout" },
+      { url: "https://b.gr/", status: 503, ms: 100, error: null },
+      { url: "https://c.gr/", status: 404, ms: 100, error: null },
+      { url: "https://d.gr/", status: 200, ms: 6000, error: null },
+      { url: "https://e.gr/", status: 200, ms: 100, error: null },
+    ] }, o);
+    expect(f.map((x) => `${x.project}:${x.code}`)).toEqual(["a.gr:url_down", "b.gr:url_down", "c.gr:url_error", "d.gr:url_slow"]);
+  });
+});

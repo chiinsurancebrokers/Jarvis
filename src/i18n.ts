@@ -11,6 +11,9 @@ export const messages: Record<Lang, Record<FindingCode, Template>> = {
     dormant_but_deployed: (p) => `no code changes for ${p.days} days, yet it is still deployed`,
     repo_dormant: (p) => `no code changes for ${p.days} days`,
     source_unavailable: (p) => `could not read ${p.source}: ${p.message}`,
+    url_down: (p) => `the website is not answering (${p.status})`,
+    url_error: (p) => `the website answers with an error (${p.status})`,
+    url_slow: (p) => `the website is slow: ${p.seconds} seconds to answer`,
   },
   el: {
     deploy_failed: (p) => `η ανάπτυξη είναι ${p.status} στο περιβάλλον ${p.environment}`,
@@ -21,6 +24,9 @@ export const messages: Record<Lang, Record<FindingCode, Template>> = {
       `καμία αλλαγή κώδικα εδώ και ${p.days} ημέρες, αλλά παραμένει σε λειτουργία`,
     repo_dormant: (p) => `καμία αλλαγή κώδικα εδώ και ${p.days} ημέρες`,
     source_unavailable: (p) => `δεν ήταν δυνατή η ανάγνωση του ${p.source}: ${p.message}`,
+    url_down: (p) => `ο ιστότοπος δεν απαντά (${p.status})`,
+    url_error: (p) => `ο ιστότοπος απαντά με σφάλμα (${p.status})`,
+    url_slow: (p) => `ο ιστότοπος είναι αργός: ${p.seconds} δευτερόλεπτα για να απαντήσει`,
   },
 };
 

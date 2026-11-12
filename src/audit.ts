@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { analyze } from "./findings.js";
 import { fetchGithub } from "./sources/github.js";
 import { fetchNetlify } from "./sources/netlify.js";
+import { probeAll } from "./sources/probe.js";
 import { fetchRailway } from "./sources/railway.js";
 import type { Report, Snapshot } from "./types.js";
 
@@ -27,6 +28,8 @@ async function collect(): Promise<Snapshot> {
       }
     }),
   );
+  // Live checks run after the readers so Netlify site URLs can be included.
+  snap.probes = await probeAll([...config.probeUrls, ...snap.netlify.map((n) => n.url)]);
   return snap;
 }
 
@@ -38,6 +41,7 @@ export async function runAudit(now = new Date()): Promise<Report> {
       railwayServices: snap.railway.length,
       netlifySites: snap.netlify.length,
       githubRepos: snap.github.length,
+      urlsChecked: snap.probes?.length ?? 0,
     },
     findings: analyze(snap, {
       now,
