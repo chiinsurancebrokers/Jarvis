@@ -1,5 +1,6 @@
 import type { Case } from "./agent/types.js";
 import type { Lang } from "./types.js";
+import type { Proposal } from "./super/types.js";
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -9,19 +10,38 @@ const t = {
     title: "Approval inbox", empty: "Nothing is waiting for you.", approve: "Approve → Gmail draft", reject: "Reject",
     needs: "Needs you", health: "Health, for you", asklepios: "Open Asklepios (people)", pet_nurse: "Open the pet AI nurse", pending: "Draft ready", why: "Why a person must look", from: "From",
     note: "Approving only creates a draft in Gmail. You press send yourself.", reply: "Reply",
+    noteSend: "Approve creates a Gmail draft. Approve and send sends it, but never for health, money or commitments.",
+    approveSend: "Approve and send", proposals: "Agent proposals", doApprove: "Approve", attachment: "Attachment", disabled: "switched off",
   },
   el: {
     title: "Εισερχόμενα προς έγκριση", empty: "Δεν περιμένει τίποτα εσένα.", approve: "Έγκριση → προσχέδιο Gmail", reject: "Απόρριψη",
     needs: "Χρειάζεται εσένα", health: "Υγεία, για σένα", asklepios: "Άνοιξε το Asklepios (άνθρωποι)", pet_nurse: "Άνοιξε τον pet AI nurse", pending: "Έτοιμο προσχέδιο", why: "Γιατί πρέπει να το δει άνθρωπος", from: "Από",
     note: "Η έγκριση δημιουργεί μόνο προσχέδιο στο Gmail. Το στέλνεις εσύ.", reply: "Απάντηση",
+    noteSend: "Η έγκριση δημιουργεί προσχέδιο. Η έγκριση και αποστολή το στέλνει, ποτέ όμως για υγεία, χρήματα ή δεσμεύσεις.",
+    approveSend: "Έγκριση και αποστολή", proposals: "Προτάσεις των agents", doApprove: "Έγκριση", attachment: "Συνημμένο", disabled: "απενεργοποιημένο",
   },
 } satisfies Record<Lang, Record<string, string>>;
 
-export function renderInbox(cases: Case[], lang: Lang, token: string): string {
+export interface InboxExtras { proposals: Proposal[]; allowSend: boolean; allowSign: boolean }
+
+export function renderInbox(cases: Case[], lang: Lang, token: string, x: InboxExtras = { proposals: [], allowSend: false, allowSign: false }): string {
   const l = t[lang];
   const open = cases
     .filter((c) => c.status === "pending" || c.status === "needs_human")
     .sort((a, b) => (a.status === b.status ? a.createdAt.localeCompare(b.createdAt) : a.status === "needs_human" ? -1 : 1));
+  const props = x.proposals.filter((p) => p.status === "pending");
+  const blocked = (p: Proposal) => (p.kind === "email.send" && !x.allowSend) || (p.kind === "doc.sign" && !x.allowSign);
+  const pcard = (p: Proposal) => `
+  <article class="card" data-pid="${esc(p.id)}">
+    <div class="tag">${esc(p.agent)} · ${esc(p.kind)}</div>
+    <h2>${esc(p.title)}</h2><p>${esc(p.summary)}</p>
+    ${p.reasons.length ? `<p class="why">${p.reasons.map(esc).join("; ")}</p>` : ""}
+    ${p.payload.attachment ? `<p class="meta">${l.attachment}: ${esc(String((p.payload.attachment as { name: string }).name))}</p>` : ""}
+    <div class="row">
+      <button class="ok" data-pact="approve"${blocked(p) ? " disabled" : ""}>${l.doApprove}${blocked(p) ? ` (${l.disabled})` : ""}</button>
+      <button class="no" data-pact="reject">${l.reject}</button>
+    </div>
+  </article>`;
   const card = (c: Case) => `
   <article class="card" data-id="${esc(c.id)}">
     <div class="tag ${c.status}">${c.handler ? l.health : c.status === "needs_human" ? l.needs : l.pending}</div>${c.handler ? `<p class="why"><b>${l[c.handler]}</b></p>` : ""}
@@ -33,7 +53,8 @@ export function renderInbox(cases: Case[], lang: Lang, token: string): string {
     <label>${l.reply}</label>
     <textarea rows="7">${esc(c.draft ?? "")}</textarea>
     <div class="row">
-      <button class="ok" data-act="approve">${l.approve}</button>
+      <button class="ok" data-act="approve">${l.approve}</button>${x.allowSend && !c.handler ? `
+      <button class="ok" data-act="approve_send">${l.approveSend}</button>` : ""}
       <button class="no" data-act="reject">${l.reject}</button>
     </div>
   </article>`;
@@ -54,18 +75,24 @@ textarea{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px so
 .ok{background:#c6613f;border-color:#c6613f;color:#fcfcfb}.no{background:#fff;border-color:#d9d8d0;color:#2e2c27}
 button:disabled{opacity:.5}
 </style></head><body><main>
-<h1>${l.title}</h1><p class="note">${l.note}</p>
+<h1>${l.title}</h1><p class="note">${x.allowSend ? l.noteSend : l.note}</p>
+${props.length ? `<h2>${l.proposals}</h2>${props.map(pcard).join("")}` : ""}
 ${open.length ? open.map(card).join("") : `<p>${l.empty}</p>`}
 </main>
 <script>
 const TOKEN=${JSON.stringify(token)};
 document.addEventListener("click",async(e)=>{
+  const pb=e.target.closest("button[data-pact]");
+  if(pb){const card=pb.closest(".card"); pb.disabled=true;
+    const r=await fetch("/api/proposals/"+encodeURIComponent(card.dataset.pid)+"/decide",{method:"POST",
+      headers:{"content-type":"application/json",authorization:"Bearer "+TOKEN},body:JSON.stringify({type:pb.dataset.pact})});
+    if(r.ok) location.reload(); else {pb.disabled=false; alert((await r.json().catch(()=>({}))).error||"Error");} return;}
   const b=e.target.closest("button[data-act]"); if(!b) return;
   const card=b.closest(".card"); b.disabled=true;
   const act=b.dataset.act, text=card.querySelector("textarea").value;
   const r=await fetch("/api/cases/"+encodeURIComponent(card.dataset.id)+"/decide",{method:"POST",
     headers:{"content-type":"application/json",authorization:"Bearer "+TOKEN},
-    body:JSON.stringify(act==="approve"?{type:"approve",text}:{type:"reject"})});
+    body:JSON.stringify(act==="reject"?{type:"reject"}:{type:act,text})});
   if(r.ok) card.remove(); else {b.disabled=false; alert((await r.json().catch(()=>({}))).error||"Error");}
 });
 </script></body></html>`;

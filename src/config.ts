@@ -20,7 +20,15 @@ export const autonomy: AutonomyConfig = {
   minConfidence: num(process.env.AUTONOMY_MIN_CONFIDENCE, 0.8),
 };
 
+/** Owner switches. Both default to off; flipping one is a deliberate deploy-time decision. */
+export const switches = {
+  allowSend: process.env.ALLOW_SEND === "true",
+  allowSign: process.env.ALLOW_SIGN === "true",
+};
+
 export const config = {
+  templatesDir: process.env.TEMPLATES_DIR ?? "templates",
+  signaturePngB64: process.env.SIGNATURE_PNG_B64 ?? "",
   port: num(process.env.PORT, 3000),
   token: process.env.JARVIS_TOKEN ?? "",
   railwayToken: process.env.RAILWAY_API_TOKEN ?? "",
