@@ -1,5 +1,6 @@
 import { getJson, postJson } from "../sources/http.js";
 import type { InboxItem, MailProvider } from "../agent/types.js";
+import type { Attachment, Sender } from "../super/types.js";
 
 interface Part { mimeType?: string; body?: { data?: string }; parts?: Part[] }
 interface GmailMessage {
@@ -45,11 +46,31 @@ export function buildReplyMime(item: InboxItem, text: string): string {
   ].join("\r\n");
 }
 
+const encWord = (s: string) => `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
+const wrap76 = (b64: string) => b64.replace(/(.{76})/g, "$1\r\n");
+
+/** Plain text, or multipart/mixed with one attachment. Header values are checked for line breaks. */
+export function buildMime(to: string, subject: string, text: string, att?: Attachment): string {
+  if (/[\r\n]/.test(to + subject)) throw new Error("invalid header value");
+  const head = [`To: ${to}`, `Subject: ${encWord(subject)}`, "MIME-Version: 1.0"];
+  const body = wrap76(Buffer.from(text, "utf8").toString("base64"));
+  if (!att) return [...head, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", body].join("\r\n");
+  const b = `jarvis_${Date.now().toString(36)}`;
+  return [
+    ...head, `Content-Type: multipart/mixed; boundary="${b}"`, "",
+    `--${b}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", body,
+    `--${b}`, `Content-Type: ${att.mime}; name="${encWord(att.name)}"`, `Content-Disposition: attachment; filename="${encWord(att.name)}"`,
+    "Content-Transfer-Encoding: base64", "", wrap76(att.base64), `--${b}--`, "",
+  ].join("\r\n");
+}
+
 /**
  * Gmail via OAuth refresh token. Scopes needed: gmail.readonly and gmail.compose.
- * It lists unread mail and creates DRAFTS. There is no send call anywhere in this class.
+ * It lists unread mail and creates DRAFTS. `send` exists for owner-approved sends only and is
+ * reachable solely through the orchestrator / workflow, which check the ALLOW_SEND switch first.
+ * Sending needs the extra scope gmail.send.
  */
-export class GmailProvider implements MailProvider {
+export class GmailProvider implements MailProvider, Sender {
   constructor(private creds: { clientId: string; clientSecret: string; refreshToken: string }) {}
 
   private async accessToken(): Promise<string> {
@@ -76,6 +97,17 @@ export class GmailProvider implements MailProvider {
       });
     }
     return items;
+  }
+
+  /** Sends a message. Callers must have the owner's approval and ALLOW_SEND. */
+  async send(to: string, subject: string, text: string, attachment?: Attachment, threadId?: string): Promise<void> {
+    const auth = { authorization: `Bearer ${await this.accessToken()}` };
+    await postJson("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", { raw: toB64Url(buildMime(to, subject, text, attachment)), ...(threadId ? { threadId } : {}) }, auth);
+  }
+
+  async sendReply(item: InboxItem, text: string): Promise<void> {
+    const auth = { authorization: `Bearer ${await this.accessToken()}` };
+    await postJson("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", { raw: toB64Url(buildReplyMime(item, text)), threadId: item.threadId }, auth);
   }
 
   async createDraftReply(item: InboxItem, text: string): Promise<void> {

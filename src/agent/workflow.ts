@@ -13,6 +13,8 @@ export interface Deps {
   rules: string;
   cfg: AutonomyConfig;
   now: () => Date;
+  /** Owner switch for "approve and send". Off by default. */
+  allowSend?: boolean;
 }
 
 const excerpt = (s: string, n: number) => s.replace(/\s+/g, " ").trim().slice(0, n);
@@ -67,9 +69,13 @@ export async function poll(d: Deps): Promise<number> {
   return created;
 }
 
-export type Action = { type: "approve"; text?: string } | { type: "reject" };
+export type Action = { type: "approve"; text?: string } | { type: "approve_send"; text?: string } | { type: "reject" };
 
-/** The owner's decision. Approval only creates a Gmail draft; the owner presses send. */
+/**
+ * The owner's decision. "approve" only creates a Gmail draft; the owner presses send.
+ * "approve_send" sends, and only when ALLOW_SEND is on and the hard guards find nothing:
+ * health, money and commitment content can never be sent from here, only drafted.
+ */
 export async function decide(d: Deps, id: string, action: Action): Promise<Case> {
   const c = await d.store.get<Case>("cases", id);
   if (!c) throw new Error("case not found");
@@ -84,9 +90,18 @@ export async function decide(d: Deps, id: string, action: Action): Promise<Case>
   } else {
     const finalText = (action.text ?? c.draft ?? "").trim();
     if (!finalText) throw new Error("nothing to approve: write a reply first");
-    await d.mail.createDraftReply(c.item, finalText);
+    if (action.type === "approve_send") {
+      if (!d.allowSend || !d.mail.sendReply) throw new Error("sending is switched off (ALLOW_SEND)");
+      if (c.handler || anyFlag(c.inFlags, inspectDraft(finalText))) {
+        throw new Error("this reply touches health, money or a commitment: approve as a draft and send it yourself");
+      }
+      await d.mail.sendReply(c.item, finalText);
+    } else {
+      await d.mail.createDraftReply(c.item, finalText);
+    }
     const edited = c.draft === null || finalText !== c.draft.trim();
     c.status = "approved";
+    c.sent = action.type === "approve_send";
     c.finalText = finalText;
     c.edited = edited;
     c.decidedAt = at;

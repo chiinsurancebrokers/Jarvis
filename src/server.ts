@@ -7,7 +7,10 @@ import { dayReportText, dayStats } from "./agent/report.js";
 import { decide, poll, type Action } from "./agent/workflow.js";
 import type { Case, Decision } from "./agent/types.js";
 import { categoryStats } from "./agent/learning.js";
-import { config } from "./config.js";
+import { config, switches } from "./config.js";
+import { decideProposal, runAgents, type ProposalAction } from "./super/orchestrator.js";
+import { prepareDocument, type PrepareRequest } from "./super/agents/documents.js";
+import type { AuditEntry, Proposal } from "./super/types.js";
 import { renderInbox } from "./inbox.js";
 import { spokenSummary } from "./i18n.js";
 import { renderHtml } from "./render.js";
@@ -76,10 +79,42 @@ app.post("/tools/refresh_audit", async (c) => {
 app.get("/inbox", async (c) => {
   const cases = await rt.deps.store.list<Case>("cases");
   const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "") ?? c.req.header("x-api-key") ?? c.req.query("token") ?? "";
-  return c.html(renderInbox(cases, pickLang(c.req.query("lang")), token));
+  const proposals = await rt.sup.store.list<Proposal>("proposals");
+  return c.html(renderInbox(cases, pickLang(c.req.query("lang")), token, { proposals, allowSend: switches.allowSend, allowSign: switches.allowSign }));
 });
 
-app.get("/api/status", (c) => c.json({ ...rt.ready, autonomy: rt.deps.cfg, shadowOnly: true }));
+app.get("/api/status", (c) =>
+  c.json({ ...rt.ready, autonomy: rt.deps.cfg, shadowOnly: true, allowSend: switches.allowSend, allowSign: switches.allowSign }));
+
+// ---- Super-agent: proposals from the specialist agents, approved one tap at a time ----
+app.get("/api/proposals", async (c) => c.json(await rt.sup.store.list<Proposal>("proposals")));
+app.get("/api/audit", async (c) => c.json((await rt.sup.store.list<AuditEntry>("audit")).slice(-200)));
+app.post("/api/agents/run", async (c) => c.json({ created: (await runAgents(rt.sup)).length }));
+
+app.post("/api/proposals/:id/decide", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as ProposalAction | null;
+  if (!body || (body.type !== "approve" && body.type !== "reject")) return c.json({ error: "bad request" }, 400);
+  try {
+    return c.json(await decideProposal(rt.sup, c.req.param("id"), body));
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+  }
+});
+
+// Documents agent: fill a PDF form; the owner then reviews, signs and sends step by step.
+app.post("/api/docs/prepare", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as PrepareRequest | null;
+  if (!body?.fields || (!body.template && !body.templateBase64)) return c.json({ error: "template and fields are required" }, 400);
+  try {
+    const np = await prepareDocument(config.templatesDir, body);
+    const id = (await import("node:crypto")).randomUUID().replace(/-/g, "").slice(0, 16);
+    const p: Proposal = { ...np, id, status: "pending", createdAt: new Date().toISOString() };
+    await rt.sup.store.put("proposals", id, p);
+    return c.json({ id, summary: p.summary, reasons: p.reasons });
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+  }
+});
 
 app.get("/api/cases", async (c) => c.json(await rt.deps.store.list<Case>("cases")));
 
@@ -95,7 +130,7 @@ app.post("/api/poll", async (c) => {
 
 app.post("/api/cases/:id/decide", async (c) => {
   const body = (await c.req.json().catch(() => null)) as Action | null;
-  if (!body || (body.type !== "approve" && body.type !== "reject")) return c.json({ error: "bad request" }, 400);
+  if (!body || (body.type !== "approve" && body.type !== "approve_send" && body.type !== "reject")) return c.json({ error: "bad request" }, 400);
   try {
     return c.json(await decide(rt.deps, c.req.param("id"), body));
   } catch (e) {
@@ -127,6 +162,10 @@ const refresh = () =>
     .catch((e) => console.error("audit failed", e));
 void refresh();
 setInterval(refresh, config.auditIntervalHours * 3_600_000).unref();
+
+// Run the specialist agents (morning brief etc.) every hour. They only propose.
+setInterval(() => runAgents(rt.sup).catch((e) => console.error("agents failed", e instanceof Error ? e.message : e)), 3_600_000).unref();
+void runAgents(rt.sup).catch(() => undefined);
 
 // Poll the mailbox on a timer. Failures are logged, never fatal.
 if (rt.ready.mail && rt.ready.llm) {

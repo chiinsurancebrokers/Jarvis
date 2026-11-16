@@ -53,6 +53,8 @@ export interface Case {
   decidedAt?: string;
   finalText?: string;
   edited?: boolean;
+  /** True when the owner chose "approve and send" and it was sent. */
+  sent?: boolean;
 }
 
 export interface Decision {
@@ -102,4 +104,6 @@ export interface MailProvider {
   listNewItems(): Promise<InboxItem[]>;
   /** Creates a reply DRAFT in the mailbox. It never sends. */
   createDraftReply(item: InboxItem, text: string): Promise<void>;
+  /** Sends a reply. Only used by the owner's explicit "approve and send"; absent = cannot send. */
+  sendReply?(item: InboxItem, text: string): Promise<void>;
 }

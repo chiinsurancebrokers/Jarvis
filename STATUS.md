@@ -17,6 +17,13 @@
 - Live uptime checks: every audit GETs each Netlify site URL plus `PROBE_URLS`; unreachable/5xx is critical, 4xx a warning, slow pages info
 - Postgres store when `DATABASE_URL` is set, in-memory otherwise (in-memory loses history on restart)
 
+## Done (v0.3, super-agent foundation) — on branch feature/super-agents
+- Orchestrator with an approval queue of proposals and an append-only audit log (`/api/proposals`, `/api/audit`)
+- Owner-approved sending: "Approve and send" for email, behind `ALLOW_SEND` (off by default). Health, money and commitment replies can only be drafted
+- Documents agent: fills PDF forms (Greek supported), then a chain review → sign → send, one tap each. Signing behind `ALLOW_SIGN` and `SIGNATURE_PNG_B64`
+- Daily Ops agent: one morning-brief proposal per day
+- Needs the extra Gmail scope `gmail.send`: re-authorize the refresh token before turning `ALLOW_SEND` on
+
 ## Next
 1. Deploy on Railway with Postgres, set the env vars, run against live data
 2. Create the ElevenLabs agent and connect the three tools
